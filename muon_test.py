@@ -56,8 +56,9 @@ class MuonTestGenerator(Geant4.G4VUserPrimaryGeneratorAction):
     :param _particle_gun: A particle gun generator
     """
     
-    def init(self):
-        """ Set the default particle gun settings. For some reason g4py won't allow __init__ methods."""
+    def __init__(self):
+        """ Set the default particle gun settings."""
+        Geant4.G4VUserPrimaryGeneratorAction.__init__(self)
         self._particle_gun = Geant4.G4ParticleGun(1)
         self._particle_gun.SetParticleByName("mu-")
         self._particle_gun.SetParticleEnergy(230.0 * Geant4.GeV)
@@ -87,7 +88,7 @@ if __name__ == "__main__":
     Geant4.gRunManager.SetUserInitialization(physics)
     # Now the generator
     generator = MuonTestGenerator()
-    generator.init()
+    #generator.init()
     Geant4.gRunManager.SetUserAction(generator)
     # Add per event code
     event = EventAction()
