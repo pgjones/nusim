@@ -11,8 +11,22 @@ import math
 
 target_radius = 20.0 * Geant4.m
 target_height = 20.0 * Geant4.m
-# Global energy depostied (Geant4 makes python look bad)
-energy_deposited = 0
+detector = None # Global sensitive detector
+
+class TargetDetector(Geant4.G4VSensitiveDetector):
+    """ A sensitive detector."""
+    def __init__(self):
+        Geant4.G4VSensitiveDetector.__init__(self, "TargetDetector")
+        self._total_deposit = 0.0
+    def ProcessHits(self, step, history):
+        """ Process a *step* in the detector.
+        :param step: to process
+        """
+        self._total_deposit += step.GetTotalEnergyDeposit()
+    def EndOfEvent(self, hit_collection):
+        """ Print the total energy deposited in the detector."""
+        print "Energy deposited in event =", self._total_deposit, "MeV"
+        self._total_deposit = 0.0
 
 class MuonTestGeometry(Geant4.G4VUserDetectorConstruction):
     """ This generates a box geometry, with a hole."""
@@ -29,10 +43,12 @@ class MuonTestGeometry(Geant4.G4VUserDetectorConstruction):
         world = Geant4.G4PVPlacement(Geant4.G4Transform3D(), world_logical, "world", None, False, 0)
         # The target volume is a 20x20m Cylinder in the centre
         target_solid = Geant4.G4Tubs("target_solid", 0.0, target_radius, target_height, 0.0, 2.0 * Geant4.pi)
-        target_logical = Geant4.G4LogicalVolume(target_solid, air, "target_logical")
+        global detector
+        detector = TargetDetector()
+        target_logical = Geant4.G4LogicalVolume(target_solid, air, "target_logical", None, detector)
         # Must be global in order not to be garbage collected
         global target
-        target = Geant4.G4PVPlacement(Geant4.G4Transform3D(), target_logical, "world", None, False, 0)
+        target = Geant4.G4PVPlacement(Geant4.G4Transform3D(), target_logical, "world", world_logical, False, 0)
         return world        
 
 class MuonTestGenerator(Geant4.G4VUserPrimaryGeneratorAction):
@@ -59,19 +75,7 @@ class EventAction(Geant4.G4UserEventAction):
     """ This clears the globals for each event."""
     def EndOfEventAction(self, event):
         """ Simply print out the deposited energy and reset it for the next event."""
-        global energy_deposited
-        print "This event deposited", energy_deposited, "MeV"
-        energy_deposited = 0.0
-
-class SteppingAction(Geant4.G4UserSteppingAction):
-    """ Awkward way to caluclate hits... No python sensitive detector support :("""
-    def UserSteppingAction(self, step):
-        """ Checks if step point is in target volume and counts."""
-        global energy_deposited
-        position = step.GetPreStepPoint().GetPosition()
-        # Annoying way to find if step is in target volume
-        if math.sqrt(position.x**2 + position.y**2) < target_radius and math.fabs(position.z) < target_height:
-            energy_deposited += step.GetTotalEnergyDeposit()
+        detector.EndOfEvent(None)
 
 if __name__ == "__main__":
     # Note: The weird syntax whereby objects are assigned is required to keep them globally alive
@@ -85,10 +89,7 @@ if __name__ == "__main__":
     generator = MuonTestGenerator()
     generator.init()
     Geant4.gRunManager.SetUserAction(generator)
-    # Add the stepping action (per step code)
-    stepping = SteppingAction()
-    Geant4.gRunManager.SetUserAction(stepping)
-    # and per event code
+    # Add per event code
     event = EventAction()
     Geant4.gRunManager.SetUserAction(event)
                        
